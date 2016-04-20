@@ -1,1 +1,2 @@
-/.idea
+# ignore clion project files
+.idea/

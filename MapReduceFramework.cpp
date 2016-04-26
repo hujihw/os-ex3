@@ -1,5 +1,8 @@
 // MapReduceFramework.cpp
 
+#include "MapReduceFramework.h"
+#include "ExecMap.h"
+
 unsigned int numberOfThreads;
 
 int InputIndex; // todo mutex
@@ -25,3 +28,10 @@ int InputIndex; // todo mutex
 // todo log file time measuring (consider different class\namespace)
 
 // todo error handling function
+
+
+OUT_ITEMS_LIST runMapReduceFramework(MapReduceBase &mapReduce,
+                                     IN_ITEMS_LIST &itemsList,
+                                     int multiThreadLevel) {
+    return std::list<OUT_ITEM>();
+}

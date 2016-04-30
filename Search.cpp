@@ -11,9 +11,13 @@
 
 void Search::Map(const k1Base *const key, const v1Base *const val) const {
     // downcast base types to user types
-    // check if the file is a dir
-    // use fields from user types to convert to 2base types
+    FileNameKey *fileNameKey = (FileNameKey*) &key;
+    // todo check if the file is a dir
+    // todo use fields from user types to convert to 2base types
+
+    SubStrLocation subStrLocation;
     // Emit2 the result
+    Emit2(&subStrLocation, nullptr);
 }
 
 

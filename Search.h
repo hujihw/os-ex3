@@ -13,20 +13,20 @@ class Search : MapReduceBase
                      const v1Base *const val) const override;
 };
 
-class FileNameKey : k1Base
+class FileNameKey : public k1Base
 {
+
     virtual bool operator<(const k1Base &other) const override;
 
-private:
-     std::string name;
+public:
+    std::string name;
 };
 
-class SubStrLocation : k2Base
+class SubStrLocation : public k2Base
 {
-private:
+public:
     int location;
 
-public:
     virtual bool operator<(const k2Base &other) const override;
 };
 

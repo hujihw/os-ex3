@@ -2,10 +2,15 @@
 
 #include "ExecMap.h"
 
-// todo choose container (located in the framework)
+// todo choose container (located here and in the framework)
+
+void Emit2(k2Base *, v2Base *) { // todo
+
+}
 
 // todo map function executor
     // loop over "iterations"
         // while there is still available data
             // call Map function on the relevant index
-            // add returned value to container
+            // add value to container located in the thread using Emit2 function
+    // todo what happens when iterations end? (maybe add container to the general container?)

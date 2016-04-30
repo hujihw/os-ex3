@@ -11,6 +11,8 @@ int InputIndex; // todo mutex
 
 // todo container with pointers to the threads' <K3, V3> containers for the ExecReduce
 
+// todo function to distribute the array indexes for ExecMap threads
+
 // todo container for shuffled data (map)
 
 // todo create a pool of ExecMap threads

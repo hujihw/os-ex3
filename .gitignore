@@ -1,2 +1,5 @@
 # ignore clion project files
 .idea/
+
+# ignore coding style examples
+codingStyle/

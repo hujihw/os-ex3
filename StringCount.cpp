@@ -2,6 +2,15 @@
 
 #include "StringCount.h"
 
+int main()
+{
+    IN_ITEMS_LIST inLst;
+    StringCount strCount;
+    int threadsNum = 5;
+
+    runMapReduceFramework(strCount, inLst, threadsNum);
+}
+
 //////////////////////////////////////
 // StringCount Class Implementation //
 //////////////////////////////////////

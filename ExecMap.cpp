@@ -2,9 +2,31 @@
 
 #include "ExecMap.h"
 
-// todo choose container (located here and in the framework)
+///////////////////////////////////
+// ExecMap Class Implementations //
+///////////////////////////////////
 
-void Emit2(k2Base *, v2Base *) { // todo
+// ------------------------ Singleton Methods ----------------------------------
+
+void ExecMap::ExecMap() { }
+
+ExecMap &ExecMap::getInstance() {
+    static ExecMap instance;
+    return instance;
+}
+
+// --------------------------- Other Methods -----------------------------------
+
+void ExecMap::MapFunctionExec(MapReduceBase &mapReduce,
+                              unsigned int iterations, IN_ITEMS_LIST& itemsList)
+{
+    // todo choose container (located here and in the framework)
+}
+
+
+
+void Emit2(k2Base *, v2Base *) // todo
+{
 
 }
 

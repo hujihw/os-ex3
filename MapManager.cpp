@@ -1,28 +1,21 @@
 // ExecMap.cpp
 
-#include "ExecMap.h"
+#include "MapManager.h"
 
 ///////////////////////////////////
-// ExecMap Class Implementations //
+// MapManager Class Implementations //
 ///////////////////////////////////
 
 // ------------------------ Singleton Methods ----------------------------------
 
-void ExecMap::ExecMap() { }
+void MapManager::MapManager() { }
 
-ExecMap &ExecMap::getInstance() {
-    static ExecMap instance;
+MapManager &MapManager::getInstance() {
+    static MapManager instance;
     return instance;
 }
 
 // --------------------------- Other Methods -----------------------------------
-
-void ExecMap::MapFunctionExec(MapReduceBase &mapReduce,
-                              unsigned int iterations, IN_ITEMS_LIST& itemsList)
-{
-    // todo choose container (located here and in the framework)
-}
-
 
 
 void Emit2(k2Base *, v2Base *) // todo

@@ -2,7 +2,7 @@
 
 #include <map>
 #include "MapReduceFramework.h"
-#include "ExecMap.h"
+#include "MapManager.h"
 
 class MapReduceFramework
 {
@@ -22,22 +22,22 @@ unsigned int numberOfThreads;
 
 int InputIndex; // todo mutex
 
-// todo container with pointers to the threads' <K2, V2> containers for the ExecMap
+// todo container with pointers to the threads' <K2, V2> containers for the MapManager
 std::map<pthread_t, std::vector> threadsMap;
 
 // todo container with pointers to the threads' <K3, V3> containers for the ExecReduce
 
-// todo function to distribute the array indexes for ExecMap threads
+// todo function to distribute the array indexes for MapManager threads
 
 // todo container for shuffled data (map)
 
-// todo create a pool of ExecMap threads
+// todo create a pool of MapManager threads
 
 // todo create the Shuffle thread, and put Yusuf to sleep
 
 // todo shuffle management
 
-// todo close ExecMap Threads
+// todo close MapManager Threads
 
 // todo create ExecReduce threads
 
@@ -51,7 +51,7 @@ std::map<pthread_t, std::vector> threadsMap;
 OUT_ITEMS_LIST runMapReduceFramework(MapReduceBase &mapReduce,
                                      IN_ITEMS_LIST &itemsList,
                                      int multiThreadLevel) {
-    ExecMap *execMap = new ExecMap();
+    MapManager *execMap = new MapManager();
     execMap->MapFunctionExec();
 
     return std::list<OUT_ITEM>();

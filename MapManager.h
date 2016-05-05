@@ -6,25 +6,25 @@
 #include "MapReduceFramework.h"
 #include <vector>
 
-class ExecMap
+class MapManager
 {
 public:
     /**
      * @brief A singleton get-instance function
      *
-     * @return &ExecMap a reference to the object
+     * @return &MapManager a reference to the object
      */
-    static ExecMap& getInstance();
+    static MapManager& getInstance();
 
     /**
      * @brief todo
      */
-    ExecMap(ExecMap const&) = delete;
+    MapManager(MapManager const&) = delete;
 
     /**
      * @brief todo
      */
-    void operator=(ExecMap const&) = delete;
+    void operator=(MapManager const&) = delete;
 
     /**
      * @brief This function executes several times in every thread the Map function
@@ -32,21 +32,18 @@ public:
      * todo assuming number of iterations is calculated in framework start function
      * todo fix documentation
      */
-    void MapFunctionExec(MapReduceBase &mapReduce, unsigned int iterations);
+    void ExecMap(void *(start_routine) (void *));
 
 private:
     /**
      * @brief A default constructor
      */
-    ExecMap();
+    MapManager();
 
     /**
      * the data structure that holds the type 2 key-value pairs emitted by Map
      */
     std::vector<k2Base*, v2Base*> _type2Vector;
-
-    void MapFunctionExec(MapReduceBase &mapReduce, unsigned int iterations,
-                         IN_ITEMS_LIST &itemsList);
 };
 
 

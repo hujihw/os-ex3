@@ -1,6 +1,6 @@
 // Shuffle.cpp
 
-// todo hold index for each thread, walk through the ExecMap's <K2,V2> vector
+// todo hold index for each thread, walk through the MapManager's <K2,V2> vector
 
 // todo shuffling action
 

@@ -4,42 +4,42 @@
 #include "MapReduceFramework.h"
 #include "ExecMap.h"
 
+using namespace std;
+
+typedef map<k2Base* ,list<v2Base*>> ShuffledMap; // maybe typedef the list also
+
 class MapReduceFramework
 {
 public:
+    // singleton design pattern
     static MapReduceFramework& getInstance();
 
-    MapReduceFramework(MapReduceFramework const&) = delete;
-
-    void operator=(MapReduceFramework const&) = delete;
+    void insertToShuffledMap(k2Base * k2, list<v2Base *> v2Lists);
+    ShuffledMap::const_iterator getIteratorShuffledMap();
 
 private:
-    MapReduceFramework();
+    // singleton design pattern
+    MapReduceFramework() {};
+    MapReduceFramework(MapReduceFramework const&);
+    void operator=(MapReduceFramework const&);
+
+//  the map that contains the output of the shuffle function.
+    ShuffledMap _shuffledMap;
 
 };
 
-unsigned int numberOfThreads;
+MapReduceFramework &MapReduceFramework::getInstance() {
+    static MapReduceFramework instance;
+    return instance;
+}
 
-int InputIndex; // todo mutex
+void MapReduceFramework::insertToShuffledMap(k2Base * k2, list<v2Base *> v2Lists) {
+    _shuffledMap[k2] = v2Lists;
+}
 
-// todo container with pointers to the threads' <K2, V2> containers for the ExecMap
-std::map<pthread_t, std::vector> threadsMap;
-
-// todo container with pointers to the threads' <K3, V3> containers for the ExecReduce
-
-// todo function to distribute the array indexes for ExecMap threads
-
-// todo container for shuffled data (map)
-
-// todo create a pool of ExecMap threads
-
-// todo create the Shuffle thread, and put Yusuf to sleep
-
-// todo shuffle management
-
-// todo close ExecMap Threads
-
-// todo create ExecReduce threads
+ShuffledMap::const_iterator MapReduceFramework::getIteratorShuffledMap() {
+    return _shuffledMap.begin();
+}
 
 // todo sort the output data
 
@@ -51,8 +51,15 @@ std::map<pthread_t, std::vector> threadsMap;
 OUT_ITEMS_LIST runMapReduceFramework(MapReduceBase &mapReduce,
                                      IN_ITEMS_LIST &itemsList,
                                      int multiThreadLevel) {
-    ExecMap *execMap = new ExecMap();
-    execMap->MapFunctionExec();
+    // create a map manager instance
+
+    // call the start mapping phase function
+
+    //
+
+
+
+
 
     return std::list<OUT_ITEM>();
 }

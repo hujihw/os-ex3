@@ -2,7 +2,7 @@
 
 #include <map>
 #include "MapReduceFramework.h"
-#include "ExecMap.h"
+#include "MapManager.h"
 
 using namespace std;
 

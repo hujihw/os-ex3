@@ -4,9 +4,10 @@
 #define EX3_EXECMAP_H
 
 #include "MapReduceFramework.h"
+#include "Manager.h"
 #include <vector>
 
-class MapManager
+class MapManager : public Manager
 {
 public:
     /**
@@ -14,7 +15,7 @@ public:
      *
      * @return &MapManager a reference to the object
      */
-    static MapManager& getInstance();
+    static MapManager& getInstance(int multiThreadLevel);
 
     /**
      * @brief todo
@@ -26,6 +27,14 @@ public:
      */
     void operator=(MapManager const&) = delete;
 
+    void RunMappingPhase(void *(start_routine) (void *));
+
+private:
+    /**
+     * @brief A constructor
+     */
+    MapManager(int multiThreadLevel);
+
     /**
      * @brief This function executes several times in every thread the Map function
      *        provided by the user.
@@ -34,16 +43,7 @@ public:
      */
     void ExecMap(void *(start_routine) (void *));
 
-private:
-    /**
-     * @brief A default constructor
-     */
-    MapManager();
 
-    /**
-     * the data structure that holds the type 2 key-value pairs emitted by Map
-     */
-    std::vector<k2Base*, v2Base*> _type2Vector;
 };
 
 

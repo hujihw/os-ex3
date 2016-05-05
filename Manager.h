@@ -12,7 +12,7 @@
 
 typedef struct mutexContainer
 {
-    std::vector<k2Base, v2Base> threadContainer;
+    std::list<k2Base, v2Base> threadContainer;
     pthread_mutex_t threadMutex;
 
     mutexContainer() : threadContainer(), threadMutex(PTHREAD_MUTEX_INITIALIZER)

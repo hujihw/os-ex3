@@ -19,12 +19,10 @@ int main(int argc, char *argv[])
 
     // store the substring to search
     std::string searchString(argv[1]);
-    std::cout << "search this: " << searchString << std::endl; // todo remove
 
     // insert all input into type1 pairs
     for (int i = 2; i < argc; ++i)
     {
-        std::cout << "argv[" << i << "] = " << argv[i] << std::endl; // todo remove
         DirNameK1 *dirNameKey = new DirNameK1(argv[i]);
         inputItems.push_back(std::make_pair((k1Base *) dirNameKey, (v1Base*) nullptr));
     }
@@ -38,7 +36,7 @@ int main(int argc, char *argv[])
     // print the returned values
     for (auto item = outItemsList.begin(); item != outItemsList.end(); ++item)
     {
-        std::cout << item.operator*().first << std::endl;
+        std::cout << ((FileName *)((*item).first))->fileName << " ";
     }
 
     return 0;

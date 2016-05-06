@@ -11,7 +11,6 @@ void SearchManager::Map(const k1Base *const key,
                         const v1Base *const val) const {
     struct dirent *pDirent;
     DIR *pDir;
-    std::cout << "MAP FUNCTION!" << std::endl; // todo remove
 
     const char* dirPath = (((const DirNameK1 *const) key)->dirName).c_str();
 
@@ -41,16 +40,17 @@ void SearchManager::Map(const k1Base *const key,
 
 void SearchManager::Reduce(const k2Base *const key, const V2_LIST &vals) const
 {
-    std::cout << "REDUCE FUNCTION!" << std::endl;
     for (auto filesList = vals.begin(); filesList != vals.end(); ++filesList) {
 
-        std::list<std::string> containedFilesList = ((ContainedFiles *) &filesList)->containedFilesList;
+        ContainedFiles *containedFiles = (ContainedFiles*)(*filesList);
 
-        for (auto currentFileName = containedFilesList.begin(); currentFileName != containedFilesList.end(); ++currentFileName)
+        for (auto currentFileName = containedFiles->containedFilesList.begin(); currentFileName != containedFiles->containedFilesList.end(); ++currentFileName)
         {
-            FileName *newFileName = new FileName(currentFileName.operator*());
-            std::cout << "fileName " << newFileName->fileName << std::endl;
-            Emit3(newFileName, nullptr);
+            if (std::string(*currentFileName).find(searchSubstring) != std::string::npos)
+            {
+                FileName *newFileName = new FileName((*currentFileName));
+                Emit3(newFileName, nullptr);
+            }
         }
     }
 }
@@ -98,7 +98,7 @@ DirNameK2::~DirNameK2() { }
 /////////////////////////////////////////
 
 
-ContainedFiles::ContainedFiles() { // todo need init?
+ContainedFiles::ContainedFiles() {
 
 }
 

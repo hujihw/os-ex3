@@ -3,5 +3,5 @@ project(ex3)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread")
 
-set(SOURCE_FILES Search.cpp MapReduceFramework.cpp MapReduceFramework.h MapReduceClient.h SearchDefinitions.cpp)
-add_executable(ex3 ${SOURCE_FILES})
+set(SOURCE_FILES Search.cpp SearchDefinitions.cpp Search.h MapReduceFramework.cpp MapReduceFramework.h MapReduceClient.h)
+add_executable(Search ${SOURCE_FILES})

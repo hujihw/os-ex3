@@ -1,624 +1,732 @@
-// MapReduceFramework.cpp
 
-
-//---------------my code-----------------------------------------------
+#include <pthread.h>
 #include "MapReduceClient.h"
 #include "MapReduceFramework.h"
-#include <pthread.h>
-#include <sys/time.h>
 #include <vector>
 #include <map>
+#include <sys/errno.h>
+#include <sys/time.h>
 #include <iostream>
 #include <unordered_map>
 #include <algorithm>
 #include <time.h>
 #include <stdio.h>
-#include <sys/errno.h>
 
-
-using namespace std;
-
-#define NANO_SEC 1000
-#define MICRO_SEC 1000000
-#define ADD_MICRO_SEC 10000000
-#define MAX_DATE_SIZE 80
-#define EXEC_MAP_THREAD_ID 1
-#define SHUFFLE_THREAD_ID 2
-#define EXEC_REDUCE_THREAD_ID 3
-
-//======================comparator structs================
-
-struct k2Comparator{
-    bool operator()(const k2Base * key1, const k2Base * key2) const {
-        return * key1 < * key2;
-    }
-};
-
-//struct k2Comparator {
-//    bool operator()(const k2Base * a, const k2Base * b) const {
-//        return !(* a < * b || * b < * a);
-//    }
-//};
-
+#define CHUNK 10
+#define DATE_MAX_SIZE 80
+#define EXEC_MAP_THREAD 1
+#define SHUFFLE_THREAD 2
+#define EXEC_REDUCE_THREAD 3
+#define NANO_CONVERTER 1000
+#define MICRO_CONVERTER 1000000
+#define MICRO_ADDER 10000000
+#define ERROR_RETURN -1
+#define START_BASE_INDEX 0
+#define SYS_CALL_ERROR_EXIT_CODE 1
+#define INITIAL_NUM_CONSUMED 0
+/**
+ * @brief - Comparator for pthreads that includes a comparison operator
+ */
 struct cmpPthread{
-    bool operator()(const pthread_t a, const pthread_t b) const {
+
+    /**
+     * @brief - Function receives two pthreads and compares them
+     * @a - First pthread
+     * @b - Second pthread
+     * @return - True if a and b are equal, False otherwise
+     */
+    bool operator()(const pthread_t a, const pthread_t b) const
+    {
         return pthread_equal(a, b);
     }
 };
+struct cmpk2{
+    bool operator()(const k2Base* key1, const k2Base* key2) const
+    {
+        return *key1 < *key2;
+    }
+};
+// Various typedefs to make code more readable
+typedef std::pair<k2Base*, v2Base*> LEVEL_TWO_ITEM;
+typedef std::list<LEVEL_TWO_ITEM> LEVEL_TWO_LIST;
+typedef std::vector<std::pair<pthread_t, std::pair<LEVEL_TWO_LIST*,
+                    pthread_mutex_t*>>> LEVEL_TWO_VECTOR;
+typedef std::vector<std::pair<pthread_t, OUT_ITEMS_LIST*>> LEVEL_THREE_VECTOR;
+//typedef std::map<k2Base*, V2_LIST, > SHUFFLED_MAP;
+typedef std::map<k2Base*, V2_LIST, cmpk2> SHUFFLED_MAP;
 
+// lock for the indexed access to startData
+pthread_mutex_t baseIndexLock = PTHREAD_MUTEX_INITIALIZER;
+unsigned int baseIndex;
 
-//================type defs============================
-typedef std::pair<k2Base *, v2Base *> LvlTwoPair;
-typedef std::list<LvlTwoPair> LvlTwoList;
-typedef std::vector<std::pair<pthread_t, std::pair<LvlTwoList *,pthread_mutex_t *>>> LvlTwoVec;
-typedef std::map<k2Base*, V2_LIST, k2Comparator> ShuffledMap;
-typedef std::vector<std::pair<pthread_t, OUT_ITEMS_LIST*>> LvlThreeVec;
-
-//================global variables=====================
-
-// the log file and the mutex locking its access
-pthread_mutex_t logMutex = PTHREAD_MUTEX_INITIALIZER;
+//log file and its mutex
 FILE *logFile;
+pthread_mutex_t logFileLock = PTHREAD_MUTEX_INITIALIZER;
 
-// access index and its mutex
-pthread_mutex_t idxMutex = PTHREAD_MUTEX_INITIALIZER; // todo change
-unsigned int baseIdx; // todo change
+/**
+ * @brief - Comparator for k2Base pointers that includes a comparison operator
+ */
+struct cmpK2{
 
-// conditionals and their mutex
-pthread_cond_t condTimeWaitShuffle = PTHREAD_COND_INITIALIZER;
-pthread_mutex_t condTimeWaitMutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t activeThreadsMutex = PTHREAD_MUTEX_INITIALIZER;
+    /**
+    * @brief - Function receives two k2Base pointers and compares them
+    * @a - First k2Base pointer
+    * @b - Second k2Base pointer
+    * @return - True if a and b are equal, False otherwise
+     */
+    bool operator()(const k2Base* a, const k2Base* b) const
+    {
+        return !(*a < *b || *b < *a);
+    }
+};
 
-
-// booleans that symbolizes that the mapping or reduction has finished
-bool mappingPhaseFinished;
-bool reductionPhaseFinished;
-
-//==============data structures====================
+// flags that symbolize when the mapping or reduction has ended
+bool mapEndFlag;
+bool reduceEndFlag;
 
 // vector holding the received start data for indexed access
-std::vector<IN_ITEM> inputVec;
+std::vector<IN_ITEM> startData;
 
-// vector of items mapped in the mapping phase
-LvlTwoVec lvlTwoVec;
+// vector holding the mutexes of each mappedThread and iterator to current place
+std::vector<pthread_mutex_t*> mapExecMutexVector;
+std::vector<pthread_mutex_t*>::iterator freeMutex;
 
-ShuffledMap shuffledMap;
-ShuffledMap::iterator iterShuffled;
+// map of items mapped in the map stage of mapReduce
+LEVEL_TWO_VECTOR mappedLists;
+// map for shuffled items and iterator to the shuffledMap
+SHUFFLED_MAP shuffledMap;
+SHUFFLED_MAP::iterator shuffledIt;
 
-std::vector<pthread_mutex_t *> mapExecMutexVec;
-std::vector<pthread_mutex_t *>::iterator mutexIter;
+// map of items in the reduce stage of mapReduce
+LEVEL_THREE_VECTOR reducedLists;
 
-LvlTwoVec mappedLists;
+// final merged and sorted map to be returned
+OUT_ITEMS_LIST finalLists;
 
-LvlThreeVec lvlThreeVec;
+// initialization of various mutexes and condition
+pthread_cond_t shufflerCondition = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t conditionMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t workerThreadsMutex = PTHREAD_MUTEX_INITIALIZER;
 
-OUT_ITEMS_LIST resultedOutput;
+void initializeGlobals(int numThreads)
+{
+    reducedLists = LEVEL_THREE_VECTOR();
+    reducedLists.reserve(numThreads);
+    shuffledMap =SHUFFLED_MAP();
+    mappedLists = LEVEL_TWO_VECTOR();
+    mappedLists.reserve(numThreads);
+    mapExecMutexVector = std::vector<pthread_mutex_t*>();
+    mapEndFlag = false;
+    reduceEndFlag = false;
+    baseIndex = START_BASE_INDEX;
 
-//===============functions=========================
-
-string getLogTime(){
-    char timeArray[MAX_DATE_SIZE];
-    time_t currentTime;
-    struct tm *tm;
-    if (time(& currentTime) == -1){
-        std::cerr << "MapReduceFramework Failure: time failed.";
-        exit(1);
+}
+std::string logGetFormattedTime()
+{
+    char timeBuffer [DATE_MAX_SIZE];
+    time_t curTime;
+    struct tm *tv;
+    if(time(&curTime) == -1){
+        std::cerr << "MapReduceFramework Failure: time() failed.";
+        exit(SYS_CALL_ERROR_EXIT_CODE);
     };
-    tm = localtime(& currentTime);
-    strftime(timeArray, MAX_DATE_SIZE, "[%d.%m.%Y %X]", tm);
-    return timeArray; //TODO check warning
+    tv = localtime(&curTime);
+    strftime(timeBuffer,DATE_MAX_SIZE,"[%d.%m.%Y %X]", tv);
+    return timeBuffer;
 }
 
-unsigned long calcTimeSpan(double start_time, double end_time, double start_sec, double end_sec){
-    return (unsigned long) (NANO_SEC * (MICRO_SEC * (end_sec - start_sec) + (end_time - start_time)));
-}
-
-void initFramework(int multiThreadLevel) // todo check orig
-{
-    lvlThreeVec = LvlThreeVec();
-    lvlThreeVec.reserve((unsigned long) multiThreadLevel);
-
-    shuffledMap = ShuffledMap();
-
-    lvlTwoVec = LvlTwoVec();
-    lvlTwoVec.reserve((unsigned long) multiThreadLevel);
-
-    mapExecMutexVec = std::vector<pthread_mutex_t *>();
-
-    mappingPhaseFinished = false;
-    reductionPhaseFinished = false;
-
-    baseIdx = 0;
-}
-
-/**
- * @brief - This function is called by the Map
- * function (implemented by the user) in order to add a new
- * pair of <k2,v2> to the framework's internal data structures.
- * This function is part of the MapReduceFramework's API.
- * @k2Item - The k2Base pointer object to emit.
- * @v2Item - The v2Base pointer object to emit.
- */
-void Emit2(k2Base* k2Item, v2Base* v2Item)
-{
-    const pthread_t currThreadId = pthread_self();
-
-    for(auto iter = mappedLists.begin(); iter != mappedLists.end(); iter++) {
-        if (pthread_equal(currThreadId, iter-> first)) {
-
-            ((iter->second).first)->push_back(std::move(LvlTwoPair{k2Item, v2Item}));
-//            std::cout << "mappedList size: " << mappedLists.size() << std::endl;
-//            std::cout << "first thread list size: " << mappedLists.end().operator*().second.first->size() << std::endl;
-//            std::cout << "k2Item " << ((mappedLists.end().base()->second).first->end().operator*()).first << std::endl; // todo remove
-            return;
-        }
-    }
-}
-
-/**
- * @brief - The Emit3 function is used by the Reduce
- * function in order to add a pair of <k3, v3> to the final output.
- * @k3Item - The k3Base pointer being emitted.
- * @v3Item - The v3Base pointer being emitted.
- */
-void Emit3(k3Base* k3Item, v3Base* v3Item) {
-    // Check what the current thread is.
-    const pthread_t curr_thread = pthread_self();
-
-    for (auto it = lvlThreeVec.begin(); it != lvlThreeVec.end();it++){
-        if (pthread_equal(curr_thread, it -> first)){
-
-            (it->second->push_back(std::move(OUT_ITEM{k3Item, v3Item})));
-            return;
-        }
-    }
-}
-
-/**
- * @brief - receives a LvlTwoList and adds it to the shuffledMap.
- * @inputList - list of items to shuffle
- */
-void addToShuffledMap(LvlTwoList * inputList) {
-
-    for (auto iter = (* inputList).begin(); iter != (* inputList).end(); iter++) {
-
-        k2Base *key = (iter->first);
-        v2Base *val = iter->second;
-
-        if (shuffledMap.size() != 0) {
-
-            auto newIter = shuffledMap.find(key);
-
-            if (newIter == shuffledMap.end()){
-                shuffledMap.emplace(std::pair<k2Base *, std::list<v2Base *>>(key, V2_LIST{val}));
-            }
-            else {
-                newIter->second.push_back(val);
-            }
-        }
-        else {
-            shuffledMap.emplace(std::pair<k2Base *, std::list<v2Base *>>(key, V2_LIST{val}));
-        }
-    }
-    inputList->clear();
-}
-
-OUT_ITEMS_LIST mergePhase(LvlThreeVec *lvlThreeVec)
-{
-    OUT_ITEMS_LIST retList = OUT_ITEMS_LIST();
-    for(LvlThreeVec::iterator iter = (* lvlThreeVec).begin();
-        iter != (* lvlThreeVec).end(); iter++)
+void logCreateThread(int threadType){
+    std::string curTime = logGetFormattedTime();
+    if (pthread_mutex_lock(&logFileLock))
     {
-        retList.insert(retList.end(),((*iter).second)->begin(),
-                       ((*iter).second)->end());
-    }
-
-    for (auto iter = lvlThreeVec->begin(); iter != lvlThreeVec->end(); iter++)
-    {
-        delete iter->second;
-    }
-    return retList;
-}
-
-void writeToLogCreation(int threadId){
-
-    string currentTime = getLogTime();
-
-    if (pthread_mutex_lock(& logMutex)) {
         std::cerr << "MapReduceFramework Failure: pthread_mutex_lock failed.";
-        exit(1);
+        exit(SYS_CALL_ERROR_EXIT_CODE);
     }
-    if (threadId == EXEC_REDUCE_THREAD_ID){
-        std::fprintf(logFile, "Thread ExecReduce created %s\n", currentTime.c_str());
+    if(threadType == EXEC_REDUCE_THREAD){
+        std::fprintf(logFile,"Thread ExecReduce created %s\n", curTime.c_str());
     }
-    else if (threadId == EXEC_MAP_THREAD_ID) {
-        std::fprintf(logFile, "Thread ExecMap created %s\n", currentTime.c_str());
+    else if (threadType == EXEC_MAP_THREAD)
+    {
+        std::fprintf(logFile,"Thread ExecMap created %s\n", curTime.c_str());
+    }else{
+        std::fprintf(logFile,"Thread Shuffle created %s\n", curTime.c_str());
     }
-    else {
-        std::fprintf(logFile, "Thread Shuffle created %s\n", currentTime.c_str());
-    }
-    if (pthread_mutex_unlock(&logMutex)) {
+    if (pthread_mutex_unlock(&logFileLock))
+    {
         std::cerr << "MapReduceFramework Failure: pthread_mutex_unlock failed.";
-        exit(1);
+        exit(SYS_CALL_ERROR_EXIT_CODE);
     }
     return;
 }
 
-void writeToLogTermination(int threadId){
-
-    std::string curTime = getLogTime();
-
-    if (pthread_mutex_lock(& logMutex)) {
-        std::cerr << "MapReduceFramework Failure: pthread_mutex_lock failed.";
-        exit(1);
+void logTerminateThread(int threadType){
+    std::string curTime = logGetFormattedTime();
+    if (pthread_mutex_lock(&logFileLock)) {
+        std::cerr <<
+        "MapReduceFramework Failure: pthread_mutex_lock failed.";
+        exit(SYS_CALL_ERROR_EXIT_CODE);
     }
-    if (threadId == EXEC_REDUCE_THREAD_ID) {
-        std::fprintf(logFile, "Thread ExecReduce terminated %s\n", curTime.c_str());
+    if (threadType == EXEC_REDUCE_THREAD) {
+        std::fprintf(logFile, "Thread ExecReduce terminated %s\n",
+                     curTime.c_str());
     }
-    else if (threadId == EXEC_MAP_THREAD_ID) {
-        std::fprintf(logFile, "Thread ExecMap terminated %s\n", curTime.c_str());
+    else if (threadType == EXEC_MAP_THREAD) {
+        std::fprintf(logFile, "Thread ExecMap terminated %s\n",
+                     curTime.c_str());
     } else {
-        std::fprintf(logFile, "Thread Shuffle terminated %s\n", curTime.c_str());
+        std::fprintf(logFile, "Thread Shuffle terminated %s\n",
+                     curTime.c_str());
     }
-    if (pthread_mutex_unlock(& logMutex)) {
-        std::cerr << "MapReduceFramework Failure: pthread_mutex_unlock failed.";
-        exit(1);
+    if (pthread_mutex_unlock(&logFileLock)) {
+        std::cerr <<
+        "MapReduceFramework Failure: pthread_mutex_unlock failed.";
+        exit(SYS_CALL_ERROR_EXIT_CODE);
     }
 }
 
 /**
- * @brief - the function which the shuffle thread runs.
+ * @brief Calculates the time between operations in nanoseconds
+ * @param microsecond part of start time
+ * @param microsecond part of end time
+ * @param second part of start time
+ * @param second part of end time
+ * @param number of iterations
+ * @return the elapsed times between start and end times in nanoseconds
  */
-void* shuffle(void *){
-    writeToLogCreation(SHUFFLE_THREAD_ID);
+unsigned long getElapsedTime(double start_time, double end_time,
+                             double start_sec, double end_sec){
+    // calculate the elapsed time and return it
+    unsigned long elapsed_time = (NANO_CONVERTER *(MICRO_CONVERTER*
+                                   (end_sec-start_sec)+(end_time-start_time)));
+    return elapsed_time;
+}
 
-    unsigned int consumed = 0;
+/**
+ * @brief - This function receuves a LEVEL_TWO_LIST and adds it to the shuffled
+ * map.
+ * @listToConsume - list of items in the thread's mapped bucket which we
+ * wish to "shuffle"
+ */
+void consume(LEVEL_TWO_LIST* listToConsume)
+{
+    // iterate over listToConsume
+    for(auto it = (*listToConsume).begin(); it != (*listToConsume).end(); it++)
+    {
+        // get the current pair's key and value
+        k2Base* currKey = (it->first);
+        v2Base* currVal = it->second;
+        // if this isn't the first iteration then:
+        if(shuffledMap.size() != 0) {
+            // if the key exists then add the value to the list of values
+            // else emplace new list.
+            auto it2 = shuffledMap.find(currKey);
+            // otherwise if we could not find the key then create a new pair
+            if(it2 == shuffledMap.end()){
+                shuffledMap.emplace(std::pair<k2Base *, std::list<v2Base *>>
+                                            (currKey, V2_LIST{currVal}));
+            }
+            else{
+                it2->second.push_back(currVal);
+            }
+            // if it is the first iteration then add the pair
+        }else{
+            shuffledMap.emplace(std::pair<k2Base *, std::list<v2Base *>>
+                                        (currKey, V2_LIST{currVal}));
+        }
+    }
+    listToConsume->clear();
+}
 
-    while (!mappingPhaseFinished) {
-
-        // for condtimedwait
+/**
+ * @brief - This function is given to the shuffleThread and shuffles the item
+ * emmited by the execMap threads
+ */
+void* shuffle(void*)
+{
+    logCreateThread(SHUFFLE_THREAD);
+    // initialize the total number of items consumed
+    unsigned int numConsumed = INITIAL_NUM_CONSUMED;
+    // while not all of the items have been flagged
+    while (!mapEndFlag)
+    {
+        // create a timespec and timeval struct to set out condtimedwait
         struct timespec ts;
         struct timeval tp;
-
-        gettimeofday(& tp, NULL);
+        gettimeofday(&tp, NULL);
         ts.tv_sec = tp.tv_sec;
-
-        // init condtimedwait to with 0.01 ms shift as instructed.
-        ts.tv_nsec = tp.tv_usec * NANO_SEC + ADD_MICRO_SEC;
-
-        int cond_timedwait = pthread_cond_timedwait(&condTimeWaitShuffle, &condTimeWaitMutex, &ts);
-
-
-        if (cond_timedwait == ETIMEDOUT) {
-            if (consumed == inputVec.size()) {
-                // if we mapped the whole input after getting the time out
-                break;
-            }
-        }
-
-        for(LvlTwoVec::iterator iter = lvlTwoVec.begin(); iter != lvlTwoVec.end(); iter++) {
-
-            if(!(* (iter->second).first).empty())
+        // set our condtimedwait to 0.01ms from the current timeofday
+        ts.tv_nsec = tp.tv_usec * NANO_CONVERTER + MICRO_ADDER;
+        int rc = pthread_cond_timedwait(&shufflerCondition,
+                                        &conditionMutex, &ts);
+        // if we receieved a timeout and already consumed everything then break
+        if (rc == ETIMEDOUT)
+        {
+            if (numConsumed == startData.size())
             {
-                // try locking the mutex
-                if (pthread_mutex_lock((iter->second).second)) {
-                    std::cerr << "MapReduceFramework Failure: pthread_mutex_lock failed.";
-                    exit(1);
+                break;
+            }
+        }
+        // iterate over each thread's map and consume it's items
+        for(LEVEL_TWO_VECTOR::iterator it = mappedLists.begin();
+            it != mappedLists.end(); it++)
+        {
+            if( !(*(it->second).first).empty())
+            {
+                // attempt to lock the mutex which corresponds to the thread's
+                // bucket mutex
+                if (pthread_mutex_lock((it->second).second))
+                {
+                    std::cerr << "MapReduceFramework Failure: "
+                                         "pthread_mutex_lock failed.";
+                    exit(SYS_CALL_ERROR_EXIT_CODE);
                 }
-
-                consumed += (* (iter->second).first).size();
-
-                addToShuffledMap((iter->second).first);
-
-                if (pthread_mutex_unlock((iter->second).second)) {
-                    std::cerr << "MapReduceFramework Failure: pthread_mutex_unlock failed.";
-                    exit(1);
+                numConsumed += (*(it->second).first).size();
+                consume((it->second).first);
+                if (pthread_mutex_unlock((it->second).second))
+                {
+                    std::cerr << "MapReduceFramework Failure: "
+                                         "pthread_mutex_unlock failed.";
+                    exit(SYS_CALL_ERROR_EXIT_CODE);
                 }
                 break;
             }
         }
     }
-
-    // last sweep over the level two vector to check we shuffled all of the items
-    for (auto iter2 = lvlTwoVec.begin(); iter2 != lvlTwoVec.end(); iter2++)
+    // Once everything was mapped, go over each bucket and consume if not empty
+    for (auto it = mappedLists.begin(); it != mappedLists.end(); it++)
     {
-        if (pthread_mutex_lock((iter2->second).second))
+        if (pthread_mutex_lock((it->second).second))
         {
-            std::cerr << "MapReduceFramework Failure: pthread_mutex_lock failed.";
-            exit(1);
+            std::cerr << "MapReduceFramework Failure: "
+                                 "pthread_mutex_lock failed.";
+            exit(SYS_CALL_ERROR_EXIT_CODE);
         }
-        consumed += (* (iter2->second).first).size();
-
-        addToShuffledMap(iter2->second.first);
-
-        if (pthread_mutex_unlock((iter2->second).second))
+        numConsumed += (*(it->second).first).size();
+        consume(it->second.first);
+        if (pthread_mutex_unlock((it->second).second))
         {
-            std::cerr << "MapReduceFramework Failure: pthread_mutex_unlock failed.";
-            exit(1);
+            std::cerr << "MapReduceFramework Failure: "
+                                 "pthread_mutex_unlock failed.";
+            exit(SYS_CALL_ERROR_EXIT_CODE);
         }
     }
 
-    iterShuffled = shuffledMap.begin();
-
-    writeToLogTermination(SHUFFLE_THREAD_ID);
+    // set the shuffledIt iterator to the start of shuffledMap
+    shuffledIt = shuffledMap.begin();
+    logTerminateThread(SHUFFLE_THREAD);
     return NULL;
 }
 
+
+
 /**
- * @brief - the function which each execThread thread runs.
- * @mapReduce - the MapReduceBase object
+ * @brief - Function given to each execMapThread in order to map the startData
+ * @mapReduce - a MapReduceBase object
  */
-void* ExecMap(void* mapReduce) {
-    writeToLogCreation(EXEC_MAP_THREAD_ID);
-
+void* ExecMap(void* mapReduce)
+{
+    logCreateThread(EXEC_MAP_THREAD);
     auto mapReduceBase = (MapReduceBase*) mapReduce;
-
+    // initialize the thread's mapped bucket
     try{
-        LvlTwoList * lvlTwoList = new LvlTwoList;
-
-        pthread_mutex_lock(& activeThreadsMutex);
-
-        pthread_mutex_t * threadMutex  = * mutexIter;
-        mutexIter++;
-
-        auto inPair = std::pair<LvlTwoList *, pthread_mutex_t *>(lvlTwoList, threadMutex);
-        auto outPair = std::pair<pthread_t, std::pair<LvlTwoList *, pthread_mutex_t *>>(pthread_self(), inPair);
-
-        mappedLists.push_back(outPair);
-
-        pthread_mutex_unlock(& activeThreadsMutex);
-
-        while (!mappingPhaseFinished){
-            if (pthread_mutex_lock(threadMutex)) {
-                std::cerr << "MapReduceFramework Failure: pthread_mutex_lock failed.";
-                exit(1);
-            }
-
-            int idx;
-
-            if(pthread_mutex_lock(&idxMutex)){
-                std::cerr << "MapReduceFramework Failure: pthread_mutex_lock failed.";
-                exit(1);
-            }
-
-            idx = baseIdx;
-            baseIdx += 10; // the chunk size
-
-            if (baseIdx >= inputVec.size()){
-                mappingPhaseFinished = true;
-            }
-
-            if (pthread_mutex_unlock(&idxMutex)){
-                std::cerr << "MapReduceFramework Failure: pthread_mutex_unlock failed.";
-                exit(1);
-            }
-
-            int total = std::min(idx + 10, (int) inputVec.size());
-
-            for (int i= idx; i < total; ++i) {
-                mapReduceBase->Map(inputVec[i].first, inputVec[i].second);
-            }
-
-            if (pthread_mutex_unlock(threadMutex)) {
-                std::cerr << "MapReduceFramework Failure: pthread_mutex_unlock failed.";
-                exit(1);
-            }
-            pthread_cond_signal(& condTimeWaitShuffle);
+        LEVEL_TWO_LIST* current_list = new LEVEL_TWO_LIST;
+    // attempt to get the mutex that locks the mappedList
+    pthread_mutex_lock(&workerThreadsMutex);
+    // once we get the mutex, figure out the thread's personal bucket mutex
+    pthread_mutex_t* threadMutex  = *freeMutex;
+    freeMutex++;
+    // create a pair of the thread's bucket and mutex
+    auto innerPair = std::pair<LEVEL_TWO_LIST*,
+            pthread_mutex_t*>(current_list, threadMutex);
+    // insert the pair and the thread's id into the mappedLists then unlock
+    auto outerPair = std::pair<pthread_t, std::pair<LEVEL_TWO_LIST*,
+            pthread_mutex_t*>>(pthread_self(), innerPair) ;
+    mappedLists.push_back(outerPair);
+    pthread_mutex_unlock(&workerThreadsMutex);
+    // while there are still items to be mapped
+    while (!mapEndFlag){
+        // lock the thread's bucket from the shuffle thread
+        if (pthread_mutex_lock(threadMutex))
+        {
+            std::cerr << "MapReduceFramework Failure: "
+                                 "pthread_mutex_lock failed.";
+            exit(SYS_CALL_ERROR_EXIT_CODE);
         }
-
-        writeToLogTermination(EXEC_MAP_THREAD_ID);
-        return NULL;
-
+        int base;
+        // attempt to get the mutex that locks the global baseIndex to startData
+        if(pthread_mutex_lock(&baseIndexLock)){
+            std::cerr << "MapReduceFramework Failure: "
+                                 "pthread_mutex_lock failed.";
+            exit(SYS_CALL_ERROR_EXIT_CODE);
+        }
+        // iterate over a CHUNK of items in startData and map them
+        base = baseIndex;
+        baseIndex += CHUNK;
+        // if we are at the end of startData turn on the flag
+        if(baseIndex >= startData.size()){
+            mapEndFlag = true;
+        }
+        if(pthread_mutex_unlock(&baseIndexLock)){
+            std::cerr << "MapReduceFramework Failure: "
+                                 "pthread_mutex_unlock failed.";
+            exit(SYS_CALL_ERROR_EXIT_CODE);
+        }
+        // iterate over the items the unmapped items and map them
+        int total = std::min(base + CHUNK, (int)startData.size());
+        for(int i=base; i < total; ++i)
+        {
+            mapReduceBase->Map(startData[i].first, startData[i].second);
+        }
+        // unlock the mutual mutex with the shuffler for the thread's bucket
+        if (pthread_mutex_unlock(threadMutex))
+        {
+            std::cerr << "MapReduceFramework Failure: "
+                                 "pthread_mutex_unlock failed.";
+        }
+        //  send a signal telling shuffle thread that items have been mapped
+        pthread_cond_signal(&shufflerCondition);
+    }
+    logTerminateThread(EXEC_MAP_THREAD);
+    return NULL;
     }catch(std::bad_alloc e){
         std::cerr << "MapReduceFramework Failure: new failed.";
-        exit(1);
+        exit(SYS_CALL_ERROR_EXIT_CODE);
     }
 }
 
 /**
- * @brief - the function which the reduce thread runs.
- * @param mapReduce - the MapReduceBase pointer containing the user's reduce function
+ * @brief - This function is used by the user
+ * implemented Map in order to emit the <k2Base*, v2Base*> pair and add it to
+ * the container used by the relevant thread to store the mapped pairs.
+ * @k2Item - The k2Base* object to emit.
+ * @v2Item - The v2Base* object to emit.
+ */
+void Emit2 (k2Base* k2Item, v2Base* v2Item)
+{
+    // Check what the current thread is.
+    const pthread_t curr_thread = pthread_self();
+    /**
+    LEVEL_TWO_MAP::iterator foundItem;
+    while((foundItem = mappedLists.find(curr_thread)) == mappedLists.end()){
+        std:: cout << " EMIT 2 PROBLEM" << std::endl;
+    }
+    if (foundItem == mappedLists.end()) {
+        std::cout << " EMIT 2 PROBLEM HERE" << std::endl;
+    }
+    ((foundItem->second).first)->
+            push_back(std::move(LEVEL_TWO_ITEM{k2Item, v2Item}));
+    **/
+    // Iterate through the map, using pthread_equal to check for equality.
+    // We avoid using [], at, or find since they are
+    // not thread safe and can cause problems.
+    for (auto it = mappedLists.begin(); it != mappedLists.end();it++)
+    {
+        if (pthread_equal(curr_thread, it -> first))
+        {
+            // If the relevant thread is found, we add <k2Item, v2Item> to the
+            // list. We assume the relevant thread will
+            // always be found since it adds this pair to the mappedLists
+            // container upon creation.
+            ((it->second).first)->
+                    push_back(std::move(LEVEL_TWO_ITEM{k2Item, v2Item}));
+            return;
+        }
+    }
+}
+
+/**
+ * @brief This function is used by the user implementation of Map in
+ * order to send the Reduced pair to the container
+ * used by the relevant ExecReduce thread. (Later on is merged).
+ * @k3Item - The k3Base* being emitted.
+ * @v3Item - The v3Base* being emitted.
+ */
+void Emit3 (k3Base* k3Item, v3Base* v3Item)
+{
+    // Check what the current thread is.
+    const pthread_t curr_thread = pthread_self();
+    /**
+    LEVEL_THREE_MAP::iterator foundItem;
+    while((foundItem = reducedLists.find(curr_thread)) == reducedLists.end()){
+        std:: cout << " EMIT 3 PROBLEM" << std::endl;
+    }
+    (foundItem->second)->push_back(std::move(OUT_ITEM{k3Item, v3Item}));
+    **/
+    // Iterate through the map, using pthread_equal to check for equality.
+    // We avoid using [], at, or find since they are not thread safe and
+    // can cause problems.
+    for (auto it = reducedLists.begin(); it != reducedLists.end();it++)
+    {
+        // If the relevant thread is found, we add <k3Item, v3Item> to the list.
+        // We assume the relevant thread will always be found since it adds this
+        // pair to the reducedLists container upon creation.
+        if (pthread_equal(curr_thread, it -> first))
+        {
+            (it->second->push_back(std::move(OUT_ITEM{k3Item, v3Item})));
+            return ;
+        }
+    }
+}
+
+/**
+ * @brief - This function is the routine called by the threads used to reduce
+ * the Shuffler's output to containers, to
+ * be merged later on.
+ * @param mapReduce - This is the MapReduceBase* containing the Reduce function
+ * entered by the user in the function which runs the framework. The type is
+ * void* in order to comply with the pthread API.
  */
 void* ExecReduce(void* mapReduce)
 {
-    writeToLogCreation(EXEC_REDUCE_THREAD_ID);
+    logCreateThread(EXEC_REDUCE_THREAD);
+    // Cast void* in order to use the reduce function.
+    auto mapReduceBase = (MapReduceBase*) mapReduce;
 
-    auto mapReduceBase = (MapReduceBase *) mapReduce;
-
+    // Dynamically allocate the container to be used by each ExecReduce thread.
     try {
-        OUT_ITEMS_LIST * outItemsList = new OUT_ITEMS_LIST;
+        OUT_ITEMS_LIST *current_list = new OUT_ITEMS_LIST;
 
-        pthread_mutex_lock(& activeThreadsMutex);
+        /*
+         * Lock the reducedLists container to enable safe addition of the
+         * pair which identifies the thread and its relevant container.
+        */
+        pthread_mutex_lock(&workerThreadsMutex);
+        reducedLists.push_back(std::pair<pthread_t, OUT_ITEMS_LIST *>
+                                       (pthread_self(), current_list));
+        pthread_mutex_unlock(&workerThreadsMutex);
 
-        lvlThreeVec.push_back(std::pair<pthread_t, OUT_ITEMS_LIST *>(pthread_self(), outItemsList));
-
-        pthread_mutex_unlock(& activeThreadsMutex);
-
-        while (!reductionPhaseFinished){
-            if (pthread_mutex_lock(&idxMutex)){
-                std::cerr << "MapReduceFramework Failure: pthread_mutex_lock failed.";
-                exit(1);
+        /*
+         * Mutex serves as a gate which does not enable Emit3() to be called
+         * until all the ExecThreads have been created and added themselves to a
+         * reducedLists container (which holds all the pthreads and relevant
+         * containers)
+         * This is done to ensure that during iteration over the reducedLists
+         * container (this happens during the emit
+         * method), the iterator is not invalidated by the addition of a key.
+         */
+        while (!reduceEndFlag) {
+            // Lock baseIndex mutex, ensures safe usage of reduceEndFlag
+            if (pthread_mutex_lock(&baseIndexLock)) {
+                std::cerr << "MapReduceFramework Failure: "
+                        "pthread_mutex_lock failed.";
+                exit(SYS_CALL_ERROR_EXIT_CODE);
             }
+            // The const iterator used to go over the shuffledMap.
+            SHUFFLED_MAP::iterator currentIt = shuffledIt;
 
-            ShuffledMap::iterator currentIter = iterShuffled;
-
-            for (int i = 0; i < 10; ++i) {
-                if (iterShuffled != shuffledMap.end()) {
-                    iterShuffled++;
+            // Increments the iterator indicating up to where the shuffledMap
+            // has been read, and turns on the reduceEndFlag
+            // boolean if necessary.
+            for (int i = 0; i < CHUNK; ++i) {
+                if (shuffledIt != shuffledMap.end()) {
+                    shuffledIt++;
                 }
                 else {
-                    reductionPhaseFinished = true;
+                    reduceEndFlag = true;
                     break;
                 }
 
             }
-
-            if (pthread_mutex_unlock(& idxMutex)) {
-                std::cerr << "MapReduceFramework Failure: pthread_mutex_unlock failed.";
-                exit(1);
+            // unlock baseIndex
+            if (pthread_mutex_unlock(&baseIndexLock)) {
+                std::cerr << "MapReduceFramework Failure: "
+                        "pthread_mutex_unlock failed.";
+                exit(SYS_CALL_ERROR_EXIT_CODE);
             }
-
-            for (int j = 0; j < 10; ++j) {
-                if (currentIter == shuffledMap.end()) {
+            /*
+             * Reduces the chunked elements.
+             */
+            for (int j = 0; j < CHUNK; ++j) {
+                if (currentIt == shuffledMap.end()) {
                     break;
                 }
-                mapReduceBase->Reduce(currentIter->first, (currentIter->second));
-                currentIter++;
+                mapReduceBase->Reduce(currentIt->first, (currentIt->second));
+                currentIt++;
             }
         }
-        writeToLogTermination(EXEC_REDUCE_THREAD_ID);
+        logTerminateThread(EXEC_REDUCE_THREAD);
         return NULL;
-
     }catch(std::bad_alloc e){
         std::cerr << "MapReduceFramework Failure: new failed.";
-        exit(1);
+        exit(SYS_CALL_ERROR_EXIT_CODE);
     }
 }
 
 /**
- * The function that runs the framework.
+ * @brief - This auxiliary method takes the values of the map (which are lists)
+ * and merges them. @reducedMap - The LEVEL_THREE_MAP which contains lists of
+ * <k3Base*, v3Base*> as values.
+ * @return - A merged list of all the lists in the original reducedMap.
  */
-OUT_ITEMS_LIST runMapReduceFramework(MapReduceBase &mapReduce,
-                                     IN_ITEMS_LIST &itemsList,
-                                     int multiThreadLevel) {
-    try{
-        initFramework(multiThreadLevel);
+OUT_ITEMS_LIST merge(LEVEL_THREE_VECTOR* reducedMap)
+{
+    // List to be returned by value.
+    OUT_ITEMS_LIST result = OUT_ITEMS_LIST();
+    // Merges the list.
+    for(LEVEL_THREE_VECTOR::iterator it = (*reducedMap).begin();
+        it != (*reducedMap).end(); it++)
+    {
+        result.insert(result.end(),((*it).second)->begin(),
+                      ((*it).second)->end());
+    }
+    // Release all dynamic memory which was allocated.
+    for (auto it = reducedMap->begin(); it != reducedMap->end(); it++)
+    {
+        delete it->second;
+    }
+    return result;
+}
 
+
+/**
+ * @brief - This function runs the framework, and returns an OUT_ITEMS_LIST of
+ * <k3Base*, v3Base*>
+ * @mapReduce - The up-casted class that contains the map and reduce functions.
+ * @itemsList - The preliminary items to run the framework on.
+ * @multiThreadLevel - The amount of threads to create.
+ * @return - OUT_ITEMS_LIST of <k3Base*, v3Base*> created after the framework
+ * has finished running.
+ */
+OUT_ITEMS_LIST runMapReduceFramework(MapReduceBase& mapReduce,
+                                     IN_ITEMS_LIST& itemsList,
+                                     int multiThreadLevel)
+{
+    try {
+        initializeGlobals(multiThreadLevel);
         logFile = std::fopen(".MapReduceFramework.log", "w");
-
-        std::fprintf(logFile, "runMapReduceFramework started with %d threads\n", multiThreadLevel);
-
-        struct timeval startStamp, finishStamp;
-
-        // --------mapping phase---------
-
-        int error = gettimeofday(&startStamp, NULL);
-        if (error == -1) {
-            std::cerr << "MapReduceFramework Failure: gettimeofday failed.";
-            exit(1);
-        }
-
+        std::fprintf(logFile, "runMapReduceFramework started with %d threads\n",
+                     multiThreadLevel);
+        struct timeval start, finish;
+        int res1 = gettimeofday(&start, NULL);
+        // Create the groundwork for the shuffler and the ExecMap threads.
         pthread_t shuffleThread;
-
-        pthread_t * mapThreadArray = new pthread_t[multiThreadLevel];
-
-        // change the input dast to vector
-        inputVec = {std::make_move_iterator(std::begin(itemsList)),
-                    std::make_move_iterator(std::end(itemsList))};
-
+        pthread_t *mapThreadArray = new pthread_t[multiThreadLevel];
+        // Transfer starting data to make easier access.
+        startData = {std::make_move_iterator(std::begin(itemsList)),
+                     std::make_move_iterator(std::end(itemsList))};
+        /* Initalize all the mutexes that will be used later on by the shuffler
+         * and each thread
+         * when they compete for access to their shared container).
+         */
         for (int i = 0; i < multiThreadLevel; ++i) {
             pthread_mutex_t tempMutex = PTHREAD_MUTEX_INITIALIZER;
-
-            mapExecMutexVec.push_back(&tempMutex);
+            mapExecMutexVector.push_back(&tempMutex);
         }
+        // Iterator for the mutex vector (each ExecMap takes a mutex).
+        freeMutex = mapExecMutexVector.begin();
+        /*
+         * This mutex ensures that Emit2() cannot happen while threads are still
+         * being added to mappedLists.
+         * Any change of the mappedLists (i.e an ExecMap adding its pair) could
+         * potentially invalidate the iterator used
+         * to find the key for the relevant pthread during the emit function.
+         */
 
-        mutexIter = mapExecMutexVec.begin();
-
+        // Create all threads
         for (int i = 0; i < multiThreadLevel; ++i) {
-            if (pthread_create(& mapThreadArray[i], NULL, ExecMap, (void *) & mapReduce)) {
-                std::cerr << "MapReduceFramework Failure: pthread_create failed.";
-                exit(1);
+            if (pthread_create(&mapThreadArray[i], NULL, ExecMap,
+                               (void *) &mapReduce)) {
+                std::cerr <<
+                "MapReduceFramework Failure: pthread_create failed.";
+                exit(SYS_CALL_ERROR_EXIT_CODE);
             }
         }
-
-        if (pthread_create(& shuffleThread, NULL, shuffle, NULL)){
+        if(pthread_create(&shuffleThread, NULL, shuffle, NULL)){
             std::cerr << "MapReduceFramework Failure: pthread_create failed.";
-            exit(1);
+            exit(SYS_CALL_ERROR_EXIT_CODE);
         }
 
-        for (int i = 0; i < multiThreadLevel; ++i)
-        {
-            if (pthread_join(mapThreadArray[i], NULL))
-            {
-                std::cerr << "MapReduceFramework Failure: pthread_join failed.";
-                exit(1);
-            }
-        }
 
-        if (pthread_join(shuffleThread, NULL))
+     // Wait for all threads to complete.
+    for (int i = 0; i < multiThreadLevel; ++i)
+    {
+        if (pthread_join(mapThreadArray[i], NULL))
         {
             std::cerr << "MapReduceFramework Failure: pthread_join failed.";
-            exit(1);
+            exit(SYS_CALL_ERROR_EXIT_CODE);
         }
-
-        for (auto iter = mappedLists.begin(); iter != mappedLists.end(); iter++)
+    }
+    if (pthread_join(shuffleThread, NULL))
+    {
+        std::cerr << "MapReduceFramework Failure: pthread_join failed.";
+        exit(SYS_CALL_ERROR_EXIT_CODE);
+    }
+    // Clear all memory from mappedLists
+    for (auto it = mappedLists.begin(); it != mappedLists.end(); it++)
+    {
+        if (it->second.first != NULL)
         {
-            if (iter->second.first != NULL)
-            {
-                delete iter->second.first;
-            }
+            delete it->second.first;
         }
+    }
 
-        delete[] mapThreadArray;
+    delete[] mapThreadArray;
 
-        int error2 = gettimeofday(&finishStamp, NULL);
-        if (error2 == -1){
+        int res2 = gettimeofday(&finish, NULL);
+        if (res1 == ERROR_RETURN || res2 == ERROR_RETURN) {
             std::cerr << "MapReduceFramework Failure: gettimeofday failed.";
-            exit(1);
+            exit(SYS_CALL_ERROR_EXIT_CODE);
+
         }
+        // return the elapsed time calculation and print it to log
+        unsigned long elapsedTime = getElapsedTime(start.tv_usec,
+                                                   finish.tv_usec,
+                                                   start.tv_sec, finish.tv_sec);
 
-        unsigned long totalTime = calcTimeSpan(startStamp.tv_usec, finishStamp.tv_usec, startStamp.tv_sec, finishStamp.tv_sec);
+        // Wait for shuffle to complete and release memory.
+        res1 = gettimeofday(&start, NULL);
+        // Same flow as before, creates groundwork for pthreads
+        pthread_t *reduceThreadArray = new pthread_t[multiThreadLevel];
 
-        error = gettimeofday(& startStamp, NULL);
-        if (error == -1) {
-            std::cerr << "MapReduceFramework Failure: gettimeofday failed.";
-            exit(1);
-        }
-
-        std::cout<<"finished the mapping pahse!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"<<std::endl; // todo remove
-
-//        ------reduce phase-------
-
-        pthread_t * reduceThreadArray = new pthread_t[multiThreadLevel];
-
+        // Use same mutex to prevent Emit3 and change to reducedLists
+        // (similar to earlier)
         for (int i = 0; i < multiThreadLevel; ++i) {
-            if (pthread_create(& reduceThreadArray[i], NULL, ExecReduce, (void *) &mapReduce)){
-                std::cerr << "MapReduceFramework Failure: pthread_create failed.";
-                exit(1);
+            if (pthread_create(&reduceThreadArray[i], NULL, ExecReduce,
+                               (void *) &mapReduce)) {
+                std::cerr <<
+                "MapReduceFramework Failure: pthread_create failed.";
+                exit(SYS_CALL_ERROR_EXIT_CODE);
             }
+
         }
 
+        // Wait for all ExecReduce threads to finish
         for (int i = 0; i < multiThreadLevel; ++i) {
             if (pthread_join(reduceThreadArray[i], NULL)) {
                 std::cerr << "MapReduceFramework Failure: pthread_join failed.";
-                exit(1);
+                exit(SYS_CALL_ERROR_EXIT_CODE);
             }
         }
-
         delete[] reduceThreadArray;
 
-        // merge the reduce phase outputs
-        resultedOutput = mergePhase(&lvlThreeVec);
+        // Merge all the containers into a final list to be returned
+        finalLists = merge(&reducedLists);
 
-        resultedOutput.sort([](const std::pair<k3Base *, v3Base *> &first,
-                               const std::pair<k3Base *, v3Base *> &second) -> bool{
-            const k3Base * firstKey = (first.first);
-            const k3Base * secondKey = (second.first);
-            return (* firstKey < * secondKey);
+        /*
+         * Sort the list via lambda function which compares pairs according to
+         * the k3Base comparator (used from the class derived from k3Base.
+         */
+        finalLists.sort([](const std::pair<k3Base *, v3Base *> &x,
+                           const std::pair<k3Base *, v3Base *> &y) -> bool {
+            const k3Base *firstKey = (x.first);
+            const k3Base *secondKey = (y.first);
+            return (*firstKey < *secondKey);
         });
-
-//        for (auto )
-
-        error = gettimeofday(&finishStamp, NULL);
-        if (error == -1){
+        res2 = gettimeofday(&finish, NULL);
+        if (res1 == ERROR_RETURN || res2 == ERROR_RETURN) {
             std::cerr << "MapReduceFramework Failure: gettimeofday failed.";
         }
-
-        std::fprintf(logFile, "Map and Shuffle took %lu ns\n", totalTime);
-
-        totalTime = calcTimeSpan(startStamp.tv_usec, finishStamp.tv_usec,
-                                   startStamp.tv_sec, finishStamp.tv_sec);
-
-        std::fprintf(logFile, "Reduce took %lu ns\n", totalTime);
+        // return the elapsed time calculation and print it to log
+        std::fprintf(logFile, "Map and Shuffle took %lu ns\n", elapsedTime);
+        elapsedTime = getElapsedTime(start.tv_usec, finish.tv_usec,
+                                     start.tv_sec, finish.tv_sec);
+        std::fprintf(logFile, "Reduce took %lu ns\n", elapsedTime);
         std::fprintf(logFile, "runMapReduceFramework finished\n");
-
         std::fclose(logFile);
-
-        std::cout<<"finished the whole thing!!!!"<<std::endl; // todo remove
-        return resultedOutput;
-    }
-    catch(std::bad_alloc e){
+        return finalLists;
+    }catch(std::bad_alloc e){
         std::cerr << "MapReduceFramework Failure: new failed.";
-        exit(1);
+        exit(SYS_CALL_ERROR_EXIT_CODE);
     }
 }
+

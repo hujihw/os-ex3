@@ -139,15 +139,9 @@ class SearchFunctions : public MapReduceBase {
 
     void Map(const k1Base *const key, const v1Base *const val) const{
 
-
-
         // Down casting the key and value
         string substring = ((substringToSearch *) key) ->substring;
         string filename = ((fileNameV1 *) val) -> fileName;
-
-//        std::cout<<substring<<std::endl; // todo remove
-//        std::cout<<filename<<std::endl; // todo remove
-
 
         // Checking if the string is a substring of the file name
         bool isSub = false;
@@ -167,9 +161,6 @@ class SearchFunctions : public MapReduceBase {
 
         // Down casting the key and value
         bool keyVal = ((occurrenceK2 *)key)->subExists;
-
-//        std::cout<<"key val:" <<std::endl; // todo remove
-
 
         // Creating the appropriate K3 V3, and calling Emit 3
         occurrenceK3 * occurrence = new occurrenceK3(keyVal);
@@ -232,7 +223,6 @@ int main(int argc,char *argv[]){
     SearchFunctions searchFunctions;
 
     result = runMapReduceFramework(searchFunctions, inputItems, 5);
-
 
     // Printing results
     for(auto resPair : result){

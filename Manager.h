@@ -28,9 +28,9 @@ public:
 
     virtual ~Manager() = delete;
 
-    void threadCreator(void *(*start_routine) (void *), std::map &threadsMap);
+    void threadCreator(void* (*start_routine) (void *), std::map &threadsMap);
 
-private:
+protected:
 
     static int _multiThreadLevel;
 

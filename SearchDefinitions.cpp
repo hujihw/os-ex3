@@ -32,8 +32,10 @@ void SearchManager::Map(const k1Base *const key,
 }
 
 
-void SearchManager::Reduce(const k2Base *const key, const V2_LIST &vals) const {
-    std::cout << "Reduce!" << std::endl;
+void SearchManager::Reduce(const k2Base *const key, const V2_LIST &vals) const
+{
+    FileNameKey *fileNameKey = new FileNameKey(((ContainsKey*) &key)->fileName);
+    Emit3(fileNameKey, nullptr);
 }
 
 
@@ -42,12 +44,8 @@ SearchManager::SearchManager(
 
 SearchManager::~SearchManager()
 {
-//    delete searchSubstring;
+
 }
-
-
-
-
 
 
 //////////////////////////////
@@ -75,8 +73,6 @@ bool ContainsKey::operator<(const k2Base &other) const {
 ContainsKey::ContainsKey(std::string &newFileName) : fileName(newFileName){ }
 
 
-
-
 ///////////////////////////////////////
 // FileNameKey Class Implementations //
 ///////////////////////////////////////
@@ -84,3 +80,5 @@ ContainsKey::ContainsKey(std::string &newFileName) : fileName(newFileName){ }
 bool FileNameKey::operator<(const k3Base &other) const {
     return false;
 }
+
+FileNameKey::FileNameKey(std::string &newFileName) : fileName(newFileName) { }

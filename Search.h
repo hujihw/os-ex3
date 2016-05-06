@@ -66,9 +66,12 @@ class ContainsValue : public v2Base {};
 
 class FileNameKey : public k3Base
 {
-
 public:
+    FileNameKey(std::string &newFileName);
+
     virtual bool operator<(const k3Base &other) const override;
+
+    std::string fileName;
 };
 
 class FileNameValue : public v3Base {};

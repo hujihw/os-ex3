@@ -5,6 +5,7 @@
 #include <iostream>
 #include <pthread.h>
 #include "MapReduceFramework.h"
+#include "Search.h"
 
 using namespace std;
 
@@ -40,16 +41,20 @@ ShuffledMap _shuffledMap;
 // ------------------------------- functions -----------------------------------
 
 
-void Emit2(k2Base *, v2Base *) {
+// emit2 implementation
+void Emit2(k2Base *, v2Base *)
+{
     cout << "emit2" << endl;
 }
 
-
-void Emit3(k3Base *, v3Base *) {
+// emit3 implementation
+void Emit3(k3Base *, v3Base *)
+{
     cout << "emit3" << endl;
 }
 
-void* dummyFunction(void *)
+// a function to add to the threads before implementing map and reduce
+void* dummyFunction(void *) // todo remove this function
 {
     cout << "thread id: " + pthread_self() << endl;
     return nullptr;

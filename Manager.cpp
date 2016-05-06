@@ -9,7 +9,7 @@ Manager::Manager(int multiThreadLevel) : _multiThreadLevel(multiThreadLevel)
 }
 
 
-void Manager::threadCreator(void *(*start_routine) (void *),
+void Manager::threadCreator(void* (*start_routine) (void *),
                             std::map &threadsMap)
 {
     // lock the threads map so shuffle could not read from it while initializing

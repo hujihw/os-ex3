@@ -4,9 +4,13 @@
 #define EX3_EXECMAP_H
 
 #include "MapReduceFramework.h"
+#include "Manager.h"
 #include <vector>
+#include <iostream>
 
-class MapManager
+typedef std::map<k2Base*, std::list<v2Base*>> ShuffledMap;
+
+class MapManager : public Manager
 {
 public:
     /**
@@ -14,7 +18,7 @@ public:
      *
      * @return &MapManager a reference to the object
      */
-    static MapManager& getInstance();
+    static MapManager& getInstance(int multiThreadLevel, IN_ITEMS_LIST &inItemsList);
 
     /**
      * @brief todo
@@ -26,24 +30,27 @@ public:
      */
     void operator=(MapManager const&) = delete;
 
+    ShuffledMap* RunMappingPhase(void (*start_routine)(const k1Base *const, const v1Base *const));
+
+    ShuffledMap shuffledMap;
+
+private:
+    /**
+     * @brief A constructor
+     */
+    MapManager(int multiThreadLevel, IN_ITEMS_LIST &inItemsList);
+
     /**
      * @brief This function executes several times in every thread the Map function
      *        provided by the user.
      * todo assuming number of iterations is calculated in framework start function
      * todo fix documentation
      */
-    void ExecMap(void *(start_routine) (void *));
+    void * ExecMap(void *start_routine);
 
-private:
-    /**
-     * @brief A default constructor
-     */
-    MapManager();
+    IN_ITEMS_LIST _inItemsList;
 
-    /**
-     * the data structure that holds the type 2 key-value pairs emitted by Map
-     */
-    std::vector<k2Base*, v2Base*> _type2Vector;
+
 };
 
 

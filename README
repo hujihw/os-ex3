@@ -1,0 +1,37 @@
+omri.kaplan, etzion.asaf
+omri kaplan (20043895), asaf etzion (20020272)
+EX: 3
+
+FILES:
+MapReduceFramework.cpp- The implementation of MapReduceFramework library
+Search.cpp- A program that searches for a substring in file names.
+Makefile- compiles MapReduceFramework.cpp into a library,
+		    creates an execution file for Search that uses our library,
+			creates a tar
+README- this file.
+
+REMARKS:
+
+our framework design:
+we chose the containers which are shared to be global. we hold in a vector a mutexes for each map thread created.
+we hold a vector- std::vector<std::pair<pthread_t, std::pair<list<pair<k2Base *, v2Base *>> *,pthread_mutex_t *>>>.
+through a locking a shared mutex each map thread adds itself to this vector. when a map thread reads data from the
+in list it locks an index that signs what is the next data to read from the in list.
+we used pthread_equal function for the emit func (for knowing what thread is running) as it is better that = operator.
+the shuffle thread is waiting for a sign that he has data in one of the containers by use of pthread_cond_timed_wait.
+when it is triggered it searches for a non empty list in the vector and when it finds one it competes for gaining
+control of the list by locking its relevant mutex in the vector. the shuffle thread adds the list data to the
+ShuffledMap which is- map<k2Base*, V2_LIST>. using join we ensure all of the map treads are deleted and then we
+perform a last sweep over the lists and shuffle any data left. afterwards we merge the lists and sort them for the
+desired output.
+
+ANSWERS:
+
+1. we propose the following design-
+the runMapReduceFramework would create a pipe for each map thread it creates. we hold a list in the global scope that
+stores the read file descriptors which the shuffle thread wil use and every map thread will get a write fd as a
+parameter. every map thread can write the mapped data to the pipe using its relevant write fd. finally it will finish
+the writing process when he will get a signal to stop. map threads will send through the pipe 2 pointers for key
+and value that should be shuffled.
+
+2.

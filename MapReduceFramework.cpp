@@ -147,6 +147,9 @@ void Emit2(k2Base* k2Item, v2Base* v2Item)
         if (pthread_equal(currThreadId, iter-> first)) {
 
             ((iter->second).first)->push_back(std::move(LvlTwoPair{k2Item, v2Item}));
+//            std::cout << "mappedList size: " << mappedLists.size() << std::endl;
+//            std::cout << "first thread list size: " << mappedLists.end().operator*().second.first->size() << std::endl;
+//            std::cout << "k2Item " << ((mappedLists.end().base()->second).first->end().operator*()).first << std::endl; // todo remove
             return;
         }
     }
@@ -593,6 +596,8 @@ OUT_ITEMS_LIST runMapReduceFramework(MapReduceBase &mapReduce,
             const k3Base * secondKey = (second.first);
             return (* firstKey < * secondKey);
         });
+
+//        for (auto )
 
         error = gettimeofday(&finishStamp, NULL);
         if (error == -1){

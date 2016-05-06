@@ -9,37 +9,50 @@
 
 void SearchManager::Map(const k1Base *const key,
                         const v1Base *const val) const {
-    int len;
     struct dirent *pDirent;
     DIR *pDir;
     std::cout << "MAP FUNCTION!" << std::endl; // todo remove
-    const char *dirPath = ((DirNameKey*) &key)->dirName.c_str();
+
+    const char* dirPath = (((const DirNameK1 *const) key)->dirName).c_str();
+
+    ContainedFiles *containedFiles = new ContainedFiles();
+
     pDir = opendir(dirPath);
-    std::cout << "pDir " << &pDir << std::endl; // todo remove
+
     if (pDir != NULL)
     {
-        std::cout << "NOT NULL!" << std::endl; // todo remove
         // for each file in the dir check if it contains the word
         while ((pDirent = readdir(pDir)) != nullptr)
         {
-            // add containing files with Emit2
-            std::string dirName(pDirent->d_name);
-            if (dirName.find(searchSubstring))
-            {
-                ContainsKey *newKey = new ContainsKey(dirName);
-                Emit2(newKey, nullptr);
-            }
+            std::string fileName(pDirent->d_name);
+
+            containedFiles->containedFilesList.push_back(fileName);
+
         }
+
+        DirNameK2 *dirName =
+                new DirNameK2(((const DirNameK1 *const) key)->dirName);
+
+        Emit2(dirName, containedFiles);
     }
-    std::cout << "NULL!" << std::endl; // todo remove
     closedir(pDir);
 }
 
 
 void SearchManager::Reduce(const k2Base *const key, const V2_LIST &vals) const
 {
-    FileNameKey *fileNameKey = new FileNameKey(((ContainsKey*) &key)->fileName);
-    Emit3(fileNameKey, nullptr);
+    std::cout << "REDUCE FUNCTION!" << std::endl;
+    for (auto filesList = vals.begin(); filesList != vals.end(); ++filesList) {
+
+        std::list<std::string> containedFilesList = ((ContainedFiles *) &filesList)->containedFilesList;
+
+        for (auto currentFileName = containedFilesList.begin(); currentFileName != containedFilesList.end(); ++currentFileName)
+        {
+            FileName *newFileName = new FileName(currentFileName.operator*());
+            std::cout << "fileName " << newFileName->fileName << std::endl;
+            Emit3(newFileName, nullptr);
+        }
+    }
 }
 
 
@@ -53,36 +66,57 @@ SearchManager::~SearchManager()
 
 
 //////////////////////////////
-// DirNameKey Class Methods //
+// DirNameK1 Class Methods //
 //////////////////////////////
 
 
-DirNameKey::DirNameKey(char *newDirName) : dirName(newDirName) { }
+DirNameK1::DirNameK1(const std::string newDirName) : dirName(newDirName) {}
 
+DirNameK1::~DirNameK1() {}
 
-bool DirNameKey::operator<(const k1Base &other) const {
-    return this->dirName < ((DirNameKey*) &other)->dirName;
+bool DirNameK1::operator<(const k1Base &other) const {
+    return this->dirName < ((DirNameK1 *) &other)->dirName;
 }
 
 
 ///////////////////////////////
-// ContainsKey Class Methods //
+// DirNameK2 Class Methods //
 ///////////////////////////////
 
 
-bool ContainsKey::operator<(const k2Base &other) const {
-    return this->fileName < ((ContainsKey*) &other)->fileName;
+bool DirNameK2::operator<(const k2Base &other) const {
+    return this->fileName < ((DirNameK2 *) &other)->fileName;
 }
 
-ContainsKey::ContainsKey(std::string &newFileName) : fileName(newFileName){ }
+DirNameK2::DirNameK2(std::string newFileName) : fileName(newFileName){ }
+
+DirNameK2::~DirNameK2() { }
+
+
+/////////////////////////////////////////
+// ContainedFiles Class Implementation //
+/////////////////////////////////////////
+
+
+ContainedFiles::ContainedFiles() { // todo need init?
+
+}
+
+
+ContainedFiles::~ContainedFiles() {
+
+}
 
 
 ///////////////////////////////////////
-// FileNameKey Class Implementations //
+// FileName Class Implementations //
 ///////////////////////////////////////
 
-bool FileNameKey::operator<(const k3Base &other) const {
+
+bool FileName::operator<(const k3Base &other) const {
     return false;
 }
 
-FileNameKey::FileNameKey(std::string &newFileName) : fileName(newFileName) { }
+FileName::FileName(std::string newFileName) : fileName(newFileName) { }
+
+FileName::~FileName() { }

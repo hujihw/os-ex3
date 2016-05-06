@@ -12,10 +12,13 @@ void SearchManager::Map(const k1Base *const key,
     int len;
     struct dirent *pDirent;
     DIR *pDir;
-
-    pDir = opendir(((DirNameKey*) &key)->dirName.c_str());
+    std::cout << "MAP FUNCTION!" << std::endl; // todo remove
+    const char *dirPath = ((DirNameKey*) &key)->dirName.c_str();
+    pDir = opendir(dirPath);
+    std::cout << "pDir " << &pDir << std::endl; // todo remove
     if (pDir != NULL)
     {
+        std::cout << "NOT NULL!" << std::endl; // todo remove
         // for each file in the dir check if it contains the word
         while ((pDirent = readdir(pDir)) != nullptr)
         {
@@ -28,6 +31,7 @@ void SearchManager::Map(const k1Base *const key,
             }
         }
     }
+    std::cout << "NULL!" << std::endl; // todo remove
     closedir(pDir);
 }
 

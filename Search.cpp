@@ -19,12 +19,18 @@ int main(int argc, char *argv[])
 
     // store the substring to search
     std::string searchString(argv[1]);
+    std::cout << "search this: " << searchString << std::endl;
 
     // insert all input into type1 pairs
     for (int i = 2; i < argc; ++i)
     {
+        std::cout << "argv[" << i << "] = " << argv[i] << std::endl; // todo remove
         DirNameKey *dirNameKey = new DirNameKey(argv[i]);
         inputItems.push_back(std::make_pair((k1Base *) dirNameKey, (v1Base*) nullptr));
+        for (auto item = inputItems.begin(); item != inputItems.end(); ++item)
+        {
+            std::cout << " + "  << ((DirNameKey*) item.operator*().first)->dirName << std::endl;
+        }
     }
 
     // create the SearchManager instance

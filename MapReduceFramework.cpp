@@ -261,6 +261,7 @@ void* ExecMap(void* mapReduce) {
     }catch(std::bad_alloc e){
         mapReduceFrameworkFailure("new");
     }
+    return nullptr;
 }
 
 void* shuffle(void*) {
@@ -382,6 +383,7 @@ void* ExecReduce(void* mapReduce)
     }catch(std::bad_alloc e){
         mapReduceFrameworkFailure("new");
     }
+    return nullptr;
 }
 
 
@@ -499,5 +501,6 @@ OUT_ITEMS_LIST runMapReduceFramework(MapReduceBase& mapReduce,
     }catch(std::bad_alloc e){
         mapReduceFrameworkFailure("new");
     }
+    return std::list<OUT_ITEM>();
 }
 

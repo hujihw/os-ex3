@@ -48,3 +48,8 @@ valgrind: $(EXECSOURCES) $(EXECHEADERS) $(LIBSOURCES) $(LIBHEADERS)
 # clean all files created by this Makefile
 clean:
 	rm *.o *.a *.tar $(EXECUTABLE)
+
+## the commands for valgrind ##
+# g++ --std=c++11 -I. -Wall -pthread -c -g -o MapReduceFramework.o MapReduceFramework.cpp
+# ar rcs libMapReduceFramework.a MapReduceFramework.o
+# g++ --std=c++11 -I. -Wall -pthread -g -o Search Search.cpp SearchDefinitions.cpp libMapReduceFramework.a

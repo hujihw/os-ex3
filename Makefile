@@ -35,15 +35,15 @@ $(TARGETLIB): $(LIBOBJECTS)
 $(LIBOBJECTS): $(LIBSOURCES) $(LIBHEADERS)
 	$(CC) $(CXXFLAGS) -c -o $@ $^
 
+# compile for Valgrind debugging
+valgrind: $(EXECSOURCES) $(EXECHEADERS) $(LIBSOURCES) $(LIBHEADERS)
+	$(CC) $(CXXFLAGS) -g -c -o $(LIBOBJECTS) $(LIBSOURCES)
+	ar rcs $(TARGETLIB) $(LIBOBJECTS)
+	$(CC) $(CXXFLAGS) -g -o vSearch $(EXECSOURCES) $(TARGETLIB)
+
 # create a .tar file for submission
 tar: $(EXECSOURCES) $(EXECHEADERS) $(LIBSOURCES) Makefile README
 	tar cvf $(TAR) $^
-
-# compile for Valgrind debugging
-valgrind: $(EXECSOURCES) $(EXECHEADERS) $(LIBSOURCES) $(LIBHEADERS)
-	$(CC) $(CXXFLAGS) -g -c -o $(LIBOBJECTS) $(LIBSOURCES) $(LIBHEADERS)
-	ar rcs $(TARGETLIB) $(LIBOBJECTS)
-	$(CC) $(CXXFLAGS) -g -o vSearch $(TARGETLIB)
 
 # clean all files created by this Makefile
 clean:

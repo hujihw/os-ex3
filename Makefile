@@ -13,8 +13,9 @@ EXECHEADERS=Search.h
 EXECOBJECTS=$(EXECSOURCES:.cpp=.o)
 
 # target variables
-TARGETLIB=libMapReduceFramework.a
+TARGETLIB=MapReduceFramework.a
 EXECUTABLE=Search
+VALGRINDEXEC=vSearch
 TAR=ex3.tar
 
 
@@ -33,13 +34,13 @@ $(TARGETLIB): $(LIBOBJECTS)
 
 # build the objects for the library
 $(LIBOBJECTS): $(LIBSOURCES) $(LIBHEADERS)
-	$(CC) $(CXXFLAGS) -c -o $@ $^
+	$(CC) $(CXXFLAGS) -c -o $@ $(LIBSOURCES)
 
 # compile for Valgrind debugging
 valgrind: $(EXECSOURCES) $(EXECHEADERS) $(LIBSOURCES) $(LIBHEADERS)
 	$(CC) $(CXXFLAGS) -g -c -o $(LIBOBJECTS) $(LIBSOURCES)
 	ar rcs $(TARGETLIB) $(LIBOBJECTS)
-	$(CC) $(CXXFLAGS) -g -o vSearch $(EXECSOURCES) $(TARGETLIB)
+	$(CC) $(CXXFLAGS) -g -o $(VALGRINDEXEC) $(EXECSOURCES) $(TARGETLIB)
 
 # create a .tar file for submission
 tar: $(EXECSOURCES) $(EXECHEADERS) $(LIBSOURCES) Makefile README
@@ -47,7 +48,7 @@ tar: $(EXECSOURCES) $(EXECHEADERS) $(LIBSOURCES) Makefile README
 
 # clean all files created by this Makefile
 clean:
-	rm *.o *.a *.tar $(EXECUTABLE)
+	rm -f *.o *.a *.tar $(VALGRINDEXEC) $(EXECUTABLE)
 
 ## the commands for valgrind ##
 # g++ --std=c++11 -I. -Wall -pthread -c -g -o MapReduceFramework.o MapReduceFramework.cpp

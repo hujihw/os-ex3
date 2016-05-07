@@ -35,3 +35,20 @@ the writing process when he will get a signal to stop. map threads will send thr
 and value that should be shuffled.
 
 2.
+
+3. We will go through every method and compare these attributes:
+    a) Utilizing multi-cores
+    b) Create a sophisticated scheduler
+    c) Communication time (between different threads/processes)
+    d) Ability to progress while one thread/process is blocked
+    eOverall speed
+
+(*) Single thread and a single process:
+
+    a) There is no multi-core utilization because only
+    one thread is available to the program.
+
+    b) Also not relevant, because there is no
+    meaning for scheduling one thread.
+
+    c)  Not relevant.

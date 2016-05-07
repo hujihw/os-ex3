@@ -5,6 +5,9 @@ EX: 3
 FILES:
 MapReduceFramework.cpp- The implementation of MapReduceFramework library
 Search.cpp- A program that searches for a substring in file names.
+Search.h- A header file for the Search.cpp program
+SearchDefinitions.cpp- A definitions file for the classes and methods declared
+		       in the Search.h file.
 Makefile- compiles MapReduceFramework.cpp into a library,
 		    creates an execution file for Search that uses our library,
 			creates a tar
@@ -41,7 +44,7 @@ and value that should be shuffled.
     b) Create a sophisticated scheduler
     c) Communication time (between different threads/processes)
     d) Ability to progress while one thread/process is blocked
-    eOverall speed
+    e) Overall speed
 
 (*) Single thread and a single process:
 
@@ -51,4 +54,24 @@ and value that should be shuffled.
     b) Also not relevant, because there is no
     meaning for scheduling one thread.
 
-    c)  Not relevant.
+    c) Not relevant.
+
+ 4. For a process, none of the stack, heap and global variables is shared
+ between a parent and a child process.
+
+ 5. The difference between a Livelock and a Deadlock is the state of the
+ process involved in it. In a deadlock all of the processes involved are 
+ blocked when waiting, while in a live lock they change state (sleep, awake, 
+ etc.) while waiting for the resources, but make no progression.
+ 
+ Deadlock Example: Assume A,B two processes, each of the wants two resources:
+ 'a', 'b'. Process A already has 'a' and process B already has 'b'. At this
+ point, the two processes try to get the other resource without timeout.
+ This is a deadlock.
+  
+ Livelock Example: Let us assume a similar situation, this time the waiting is
+ done by set the process to sleep for 30 second and try again when awake. Now
+ the two processes will change states and will look active, while no one gets
+ the needed resource, and hence there is no real progress, and this is a 
+ livelock.
+

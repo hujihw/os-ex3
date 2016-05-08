@@ -15,30 +15,46 @@ README- this file.
 
 REMARKS:
 
-our framework design:
-we chose the containers which are shared to be global. we hold in a vector a mutexes for each map thread created.
-we hold a vector- std::vector<std::pair<pthread_t, std::pair<list<pair<k2Base *, v2Base *>> *,pthread_mutex_t *>>>.
-through a locking a shared mutex each map thread adds itself to this vector. when a map thread reads data from the
-in list it locks an index that signs what is the next data to read from the in list.
-we used pthread_equal function for the emit func (for knowing what thread is running) as it is better that = operator.
-the shuffle thread is waiting for a sign that he has data in one of the containers by use of pthread_cond_timed_wait.
-when it is triggered it searches for a non empty list in the vector and when it finds one it competes for gaining
-control of the list by locking its relevant mutex in the vector. the shuffle thread adds the list data to the
-ShuffledMap which is- map<k2Base*, V2_LIST>. using join we ensure all of the map treads are deleted and then we
-perform a last sweep over the lists and shuffle any data left. afterwards we merge the lists and sort them for the
-desired output.
+Our framework design:
+we chose the containers which are shared to be global. We hold in a vector a
+mutexes for each map thread created. We hold a 
+vector- std::vector<std::pair<pthread_t, 
+std::pair<list<pair<k2Base *, v2Base *>> *,pthread_mutex_t *>>>. 
+through a locking a shared mutex each map thread adds itself to this vector. 
+when a map thread reads data from the in list it locks an index that signs what 
+is the next data to read from the in list. We used pthread_equal function for 
+the emit func (for knowing what thread is running) as it is better 
+that = operator. The shuffle thread is waiting for a sign that he has data in 
+one of the containers by use of pthread_cond_timed_wait. When it is triggered 
+it searches for a non empty list in the vector and when it finds one it competes
+for gaining control of the list by locking its relevant mutex in the vector. 
+the shuffle thread adds the list data to the ShuffledMap which is- 
+map<k2Base*, V2_LIST>. Using join we ensure all of the map treads are deleted 
+and then we perform a last sweep over the lists and shuffle any data left. 
+Afterwards we merge the lists and sort them for the desired output.
 
 ANSWERS:
 
-1. we propose the following design-
+1. We propose the following design-
 the runMapReduceFramework would create a pipe for each map thread it creates.
 We hold a list in the global scope that
-stores the read file descriptors which the shuffle thread wil use and every map thread will get a write fd as a
-parameter. every map thread can write the mapped data to the pipe using its relevant write fd. finally it will finish
-the writing process when he will get a signal to stop. map threads will send through the pipe 2 pointers for key
-and value that should be shuffled.
+stores the read file descriptors which the shuffle thread wil use and every map
+thread will get a write fd as a parameter. Every map thread can write the mapped
+data to the pipe using its relevant write fd. Finally it will finish the writing
+process when he will get a signal to stop. Map threads will send through the 
+pipe 2 pointers for key and value that should be shuffled.
 
-2.
+
+2. In order to optimize the performance we would use multiTreadLevel = 6 because
+the program relays mainly on arithmetic calculations, and not on desk access
+operations, we would aim to reduce overhead on context switches as much as we
+can, so a core per thread is the best for our needs. At the mapping phase, we
+have multiThreadLevel number of ExecMap threads, one Shuffle thread and one
+main thread. On the Reduce phase we have one thread less (Shuffle thread).
+With this amount of threads we have one 'wasted' core at the reduce phase, but
+we don't have context switch overhead and hence we should get the best
+performance.
+
 
 3. We will go through every method and compare these attributes:
     a) Utilizing multi-cores
@@ -65,17 +81,34 @@ and value that should be shuffled.
     In Moti's implementation, the communication is also done by the operating
     system, but since it is still happens in the same process, it is relatively
     faster than Galit's communication.
-    In 
+    In Danny's implementation, the communication is the fastest since it occurs
+    within the same process.
+    In Nira's implementation the communication is not relevant because there is
+    only one thread in one process.
     
     
     d) Ability to progress while one thread/process is blocked
+
+    In Nira's implementation there is no progress if the thread or process is
+    blocked, since it is a lone thread and the program has nothing else to run.
+    On Galit and Moti's implementations, there is an ability to progress.
+    In Galit's implementation if a process is blocked, there are other processes
+    that will continue to run (unless they need a resource that the blocked
+    process holds). In Moti's implementation other threads can make a progress
+    if one is blocked, but there is no progress if the whole process is blocked.
+    In Danny's implementation, if the process is blocked, no progress is
+    possible. But if one internal thread is blocked by the internal scheduler,
+    the program can still make a progress.
+
     e) Overall speed
+    The speed depends on the user's usage and input size; if the usage includes
+    a lot of disk writing, than Galit and Moti's implementation will perform
+    faster than Danny and Nira's, since blocking a thread/process still enables
+    other parts of the program to progress. If the usage depends mainly on
+    arithmetic calculations than Nira's implementation should perform the
+    fastest, Danny will be the second, Moti the third and Galit the last. This
+    is because of the amount of context switches.
 
-    c) Not relevant.
-    
-    d) There is no progression when the thread/process is blocked.
-
-    e) 
 
  4. For process, none of the stack, heap and global variables is shared
  between a parent and a child.
@@ -83,6 +116,7 @@ and value that should be shuffled.
  thread has its own stack.
  User-level threads share all the three, because for the system see them as one
  process. 
+
 
  5. The difference between a Livelock and a Deadlock is the state of the
  process involved in it. In a deadlock all of the processes involved are 
@@ -100,3 +134,9 @@ and value that should be shuffled.
  the needed resource, and hence there is no real progress, and this is a 
  livelock.
 
+
+ 6. Calculations according to schedulers: 
+ Round Robin - Average=4.2 Turnaround=9.4
+ FCFS - Average wait=8 Turnaround=13.2
+ SRTF - Average=2.2 Turnaround =7.4
+ Priority - Average wait=6.4 Turnaround=11.6

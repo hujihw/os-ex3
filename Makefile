@@ -12,6 +12,9 @@ EXECSOURCES=Search.cpp SearchDefinitions.cpp
 EXECHEADERS=Search.h
 EXECOBJECTS=$(EXECSOURCES:.cpp=.o)
 
+# extra files for .tar
+EXTRAFILES=*.jpg
+
 # target variables
 TARGETLIB=MapReduceFramework.a
 EXECUTABLE=Search
@@ -43,7 +46,7 @@ valgrind: $(EXECSOURCES) $(EXECHEADERS) $(LIBSOURCES) $(LIBHEADERS)
 	$(CC) $(CXXFLAGS) -g -o $(VALGRINDEXEC) $(EXECSOURCES) $(TARGETLIB)
 
 # create a .tar file for submission
-tar: $(EXECSOURCES) $(EXECHEADERS) $(LIBSOURCES) Makefile README
+tar: $(EXECSOURCES) $(EXECHEADERS) $(LIBSOURCES) $(EXTRAFILES) Makefile README
 	tar cvf $(TAR) $^
 
 # clean all files created by this Makefile

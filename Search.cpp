@@ -24,20 +24,23 @@ int main(int argc, char *argv[])
     for (int i = 2; i < argc; ++i)
     {
         DirNameK1 *dirNameKey = new DirNameK1(argv[i]);
-        inputItems.push_back(std::make_pair((k1Base *) dirNameKey, (v1Base*) nullptr));
+        inputItems.push_back(std::make_pair((k1Base *) dirNameKey,
+                                            (v1Base*) nullptr));
     }
 
     // create the SearchManager instance
     SearchManager searchManager(searchString);
 
     // declare the output data structure
-    OUT_ITEMS_LIST outItemsList = runMapReduceFramework(searchManager, inputItems, 5);
+    OUT_ITEMS_LIST outItemsList = runMapReduceFramework(searchManager,
+                                                        inputItems, 5);
 
     // print the returned values
     for (auto item = outItemsList.begin(); item != outItemsList.end(); ++item)
     {
         std::cout << ((FileName *)((*item).first))->fileName << " ";
     }
+    std::cout << std::endl;
 
     return 0;
 }

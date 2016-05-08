@@ -31,7 +31,8 @@ desired output.
 ANSWERS:
 
 1. we propose the following design-
-the runMapReduceFramework would create a pipe for each map thread it creates. we hold a list in the global scope that
+the runMapReduceFramework would create a pipe for each map thread it creates.
+We hold a list in the global scope that
 stores the read file descriptors which the shuffle thread wil use and every map thread will get a write fd as a
 parameter. every map thread can write the mapped data to the pipe using its relevant write fd. finally it will finish
 the writing process when he will get a signal to stop. map threads will send through the pipe 2 pointers for key
@@ -41,23 +42,47 @@ and value that should be shuffled.
 
 3. We will go through every method and compare these attributes:
     a) Utilizing multi-cores
+    
+    In a multi core system, different processes and kernel-level threads can run
+    in parallel. With that in mind, Nira's single-thread program, and Danny's
+    program (in which the system is not aware to the existence of the threads)
+    has no multi-core utilization. Moti and Galit on the other hand, wrote
+    programs with more than one process/thread, so they have multi-core
+    utilization.
+    
+
     b) Create a sophisticated scheduler
+    
+    The operating system schedules the processes and kernel-level threads.
+    That's why Galit, Nira and Moti can not implement their own sophisticated
+    scheduler. Danny's program enables scheduler implementation because all the
+    threads are managed internally.
+
     c) Communication time (between different threads/processes)
+
+    In Galit's implementation, the communication must be done through a pipe or
+    another sort of file, which is very slow.
+    In Moti's implementation, the communication is also done by the operating
+    system, but since it is still happens in the same process, it is relatively
+    faster than Galit's communication.
+    In 
+    
+    
     d) Ability to progress while one thread/process is blocked
     e) Overall speed
 
-(*) Single thread and a single process:
-
-    a) There is no multi-core utilization because only
-    one thread is available to the program.
-
-    b) Also not relevant, because there is no
-    meaning for scheduling one thread.
-
     c) Not relevant.
+    
+    d) There is no progression when the thread/process is blocked.
 
- 4. For a process, none of the stack, heap and global variables is shared
- between a parent and a child process.
+    e) 
+
+ 4. For process, none of the stack, heap and global variables is shared
+ between a parent and a child.
+ For kernel level thread, the heap and global variables are shared, but each
+ thread has its own stack.
+ User-level threads share all the three, because for the system see them as one
+ process. 
 
  5. The difference between a Livelock and a Deadlock is the state of the
  process involved in it. In a deadlock all of the processes involved are 
